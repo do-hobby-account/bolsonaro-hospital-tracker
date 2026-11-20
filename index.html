@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bolsonaro Hospital Tracker</title>
+<meta name="description" content="Calendar and chart of every day Jair Bolsonaro has spent in hospital since the 2018 stabbing, built from news reports.">
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f6f5f2;
+  --surface: #fcfcfb;
+  --border: #e3e1dc;
+  --text: #0b0b0b;
+  --text-2: #52514e;
+  --muted: #7a7974;
+  --empty: #ebe9e4;
+  --pre: #f3f2ef;
+  --stay: #2a78d6;
+  --visit: #eb6834;
+  --grid: #e8e6e1;
+  --link: #1c5cab;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #121211;
+    --surface: #1a1a19;
+    --border: #2f2f2c;
+    --text: #f0efec;
+    --text-2: #c3c2b7;
+    --muted: #8f8e88;
+    --empty: #2a2a27;
+    --pre: #1f1f1d;
+    --stay: #3987e5;
+    --visit: #d95926;
+    --grid: #2c2c29;
+    --link: #86b6ef;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #121211; --surface: #1a1a19; --border: #2f2f2c; --text: #f0efec; --text-2: #c3c2b7;
+  --muted: #8f8e88; --empty: #2a2a27; --pre: #1f1f1d; --stay: #3987e5; --visit: #d95926;
+  --grid: #2c2c29; --link: #86b6ef;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+main { max-width: 980px; margin: 0 auto; padding: 32px 16px 64px; }
+h1 { font-size: 28px; line-height: 1.2; margin: 0 0 6px; letter-spacing: -0.01em; }
+h2 { font-size: 17px; margin: 0 0 4px; }
+.sub { color: var(--text-2); margin: 0 0 24px; max-width: 70ch; }
+.note { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+a { color: var(--link); }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 20px; }
+.status { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; margin-bottom: 20px; font-size: 15px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); font-weight: 600; font-size: 13px; }
+.pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--stay); }
+.pill.live .dot { animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .3; } }
+@media (prefers-reduced-motion: reduce) { .pill.live .dot { animation: none; } }
+.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+.tile { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+.tile .v { font-size: 28px; font-weight: 650; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.tile .l { color: var(--text-2); font-size: 13px; }
+@media (max-width: 700px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
+.legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--text-2); margin: 0 0 12px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 11px; height: 11px; border-radius: 2px; display: inline-block; }
+.cal-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.cal-year { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
+.cal-year .y { width: 40px; flex: none; font-size: 13px; font-weight: 600; color: var(--text-2); padding-top: 14px; font-variant-numeric: tabular-nums; }
+.cal-year .y small { display: block; font-weight: 400; color: var(--muted); }
+svg text { fill: var(--muted); font-size: 10px; font-family: inherit; }
+rect.d { fill: var(--empty); }
+rect.d.pre { fill: var(--pre); }
+rect.d.stay { fill: var(--stay); }
+rect.d.visit { fill: var(--visit); }
+rect.d.today { stroke: var(--text); stroke-width: 1.5; }
+rect.d.hit:hover { stroke: var(--text); stroke-width: 1.5; }
+.chart svg { width: 100%; height: auto; display: block; overflow: visible; }
+.chart .gl { stroke: var(--grid); stroke-width: 1; }
+.chart .ax { fill: var(--muted); font-size: 11px; }
+.chart .line { fill: none; stroke: var(--stay); stroke-width: 2; stroke-linejoin: round; }
+.chart .area { fill: var(--stay); opacity: .12; }
+.chart .bar { fill: var(--stay); }
+.chart .bar.hl, .chart .barhit:hover + .bar { opacity: .8; }
+.chart .val { fill: var(--text); font-size: 12px; font-weight: 600; }
+.chart .endlbl { fill: var(--text); font-size: 12px; font-weight: 600; }
+.chart .xh { stroke: var(--text-2); stroke-width: 1; stroke-dasharray: 3 3; }
+.chart .xdot { fill: var(--stay); stroke: var(--surface); stroke-width: 2; }
+#tip { position: fixed; pointer-events: none; z-index: 10; background: var(--surface); color: var(--text); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 10px; font-size: 13px; line-height: 1.4; max-width: 300px; box-shadow: 0 4px 16px rgba(0,0,0,.14); display: none; }
+#tip b { font-weight: 650; }
+#tip .m { color: var(--text-2); }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 10px 8px; border-top: 1px solid var(--border); vertical-align: top; }
+th { font-size: 12px; color: var(--text-2); font-weight: 600; border-top: 0; }
+td.n { font-variant-numeric: tabular-nums; white-space: nowrap; }
+td .h { color: var(--text-2); font-size: 13px; }
+td .src { font-size: 12px; margin-top: 4px; }
+td .src a { margin-right: 8px; }
+.tag { display: inline-block; font-size: 11px; padding: 0 6px; border-radius: 4px; border: 1px solid var(--border); color: var(--text-2); margin-left: 4px; }
+@media (max-width: 640px) {
+  thead { display: none; }
+  tr { display: block; border-top: 1px solid var(--border); padding: 8px 0; }
+  td { display: block; border: 0; padding: 2px 0; }
+}
+footer { color: var(--muted); font-size: 13px; }
+footer li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Bolsonaro Hospital Tracker</h1>
+  <p class="sub">Every day Jair Bolsonaro has spent in a hospital since he was stabbed at a campaign rally on 6 September 2018, compiled from Brazilian and international news reports.</p>
+
+  <div class="status" id="status"></div>
+
+  <div class="tiles" id="tiles"></div>
+
+  <section class="card">
+    <h2>Calendar</h2>
+    <p class="note">One square per day. Hover or tap a coloured day for details.</p>
+    <div class="legend">
+      <span><i class="sw" style="background:var(--stay)"></i>Admitted</span>
+      <span><i class="sw" style="background:var(--visit)"></i>Same-day hospital visit</span>
+      <span><i class="sw" style="background:var(--empty)"></i>Not in hospital</span>
+    </div>
+    <div class="cal-scroll"><div id="cal"></div></div>
+  </section>
+
+  <section class="card chart">
+    <h2>Cumulative days in hospital</h2>
+    <p class="note">Running total of calendar days with a hospital stay or visit since 6 Sept 2018.</p>
+    <div id="cum"></div>
+  </section>
+
+  <section class="card chart">
+    <h2>Days in hospital per year</h2>
+    <p class="note" id="yearnote"></p>
+    <div id="years"></div>
+  </section>
+
+  <section class="card">
+    <h2>Every hospital stay</h2>
+    <p class="note">Newest first. Dates are local Brazil dates and count both the admission and the discharge day.</p>
+    <table>
+      <thead><tr><th>Dates</th><th>Days</th><th>Where and why</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </section>
+
+  <footer>
+    <h2 style="color:var(--text)">How this is counted</h2>
+    <ul>
+      <li>A “hospital day” is any calendar day he was in a hospital at any point, counting the admission and discharge days. Same-day visits for exams or procedures count as one day.</li>
+      <li>An open stay counts up to today (Brasília time) until a discharge date is added.</li>
+      <li>Not counted: the many prison infirmary and home medical visits reported in early 2026, a July 2021 dental procedure, and a kidney-stone procedure some outlets place in 2019 without a date.</li>
+      <li>Reports sometimes disagree on details (e.g. which procedures were done in Sept 2023 and Dec 2025); the table notes this where it matters. Corrections welcome via the repository.</li>
+    </ul>
+    <p id="updated"></p>
+  </footer>
+</main>
+<div id="tip" role="tooltip"></div>
+
+<script src="data.js"></script>
+<script>
+(() => {
+const DAY = 86400000;
+const NS = "http://www.w3.org/2000/svg";
+const parse = s => Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10));
+const iso = t => new Date(t).toISOString().slice(0, 10);
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const nice = t => { const d = new Date(t); return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`; };
+const TODAY = parse(new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date()));
+const ORIGIN = parse("2018-09-06");
+
+// ---- build day map --------------------------------------------------------
+const stays = STAYS.map((s, i) => {
+  const a = parse(s.start), b = s.end ? parse(s.end) : TODAY;
+  return { ...s, i, a, b, open: !s.end, days: Math.round((b - a) / DAY) + 1 };
+});
+const dayMap = new Map(); // t -> { type, list:[stay] }
+for (const s of stays) for (let t = s.a; t <= s.b; t += DAY) {
+  const e = dayMap.get(t) || { type: "visit", list: [] };
+  if (s.type === "stay") e.type = "stay";
+  e.list.push(s); dayMap.set(t, e);
+}
+const total = dayMap.size;
+const elapsed = Math.round((TODAY - ORIGIN) / DAY) + 1;
+const admissions = stays.filter(s => s.type === "stay");
+const longest = admissions.reduce((m, s) => s.days > m.days ? s : m, admissions[0]);
+const open = stays.find(s => s.open);
+const el = (tag, attrs = {}, parent) => {
+  const n = document.createElementNS(NS, tag);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(n);
+  return n;
+};
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+// ---- status + tiles -------------------------------------------------------
+const status = document.getElementById("status");
+if (open) {
+  const n = Math.round((TODAY - open.a) / DAY) + 1;
+  status.innerHTML = `<span class="pill live"><i class="dot"></i>In hospital now</span>
+    <span>Day ${n} of the current stay at ${esc(open.hospital)}, admitted ${nice(open.a)}.</span>`;
+} else {
+  const last = stays.reduce((m, s) => s.b > m.b ? s : m, stays[0]);
+  const n = Math.round((TODAY - last.b) / DAY);
+  status.innerHTML = `<span class="pill"><i class="dot" style="background:var(--muted)"></i>Not in hospital</span>
+    <span>Last left hospital ${nice(last.b)} (${n} day${n === 1 ? "" : "s"} ago).</span>`;
+}
+const tiles = [
+  [total, "days in hospital since Sept 2018"],
+  [admissions.length, `admissions (plus ${stays.length - admissions.length} same-day visits)`],
+  [longest.days, `days, longest stay (${admissions.filter(s => s.days === longest.days)
+    .map(s => `${MONTHS[new Date(s.a).getUTCMonth()]} ${new Date(s.a).getUTCFullYear()}`).join(", ")})`],
+  [(total / elapsed * 100).toFixed(1) + "%", `of all days since the stabbing`],
+];
+document.getElementById("tiles").innerHTML = tiles.map(([v, l]) =>
+  `<div class="tile"><div class="v">${v}</div><div class="l">${l}</div></div>`).join("");
+
+// ---- tooltip --------------------------------------------------------------
+const tip = document.getElementById("tip");
+function showTip(html, x, y) {
+  tip.innerHTML = html; tip.style.display = "block";
+  const r = tip.getBoundingClientRect();
+  let left = x + 14, top = y + 14;
+  if (left + r.width > innerWidth - 8) left = x - r.width - 14;
+  if (left < 8) left = 8;
+  if (top + r.height > innerHeight - 8) top = y - r.height - 14;
+  tip.style.left = left + "px"; tip.style.top = top + "px";
+}
+const hideTip = () => { tip.style.display = "none"; };
+function dayTip(t) {
+  const e = dayMap.get(t);
+  if (!e) return `<b>${nice(t)}</b><div class="m">Not in hospital</div>`;
+  return `<b>${nice(t)}</b>` + e.list.map(s => {
+    const dayN = Math.round((t - s.a) / DAY) + 1;
+    const kind = s.type === "visit" ? "Same-day visit" : `Day ${dayN} of ${s.days}${s.open ? " (ongoing)" : ""}`;
+    return `<div>${kind}</div><div class="m">${esc(s.hospital)}</div><div class="m">${esc(s.reason)}</div>`;
+  }).join("");
+}
+
+// ---- calendar -------------------------------------------------------------
+const cal = document.getElementById("cal");
+const C = 11, G = 2, STEP = C + G;
+const y0 = new Date(ORIGIN).getUTCFullYear(), y1 = new Date(TODAY).getUTCFullYear();
+for (let y = y1; y >= y0; y--) {
+  const jan1 = Date.UTC(y, 0, 1), dec31 = Date.UTC(y, 11, 31);
+  const off = new Date(jan1).getUTCDay(); // Sunday-first columns
+  const weeks = Math.ceil((off + Math.round((dec31 - jan1) / DAY) + 1) / 7);
+  let yTotal = 0;
+  const wrap = document.createElement("div"); wrap.className = "cal-year";
+  const lab = document.createElement("div"); lab.className = "y";
+  wrap.appendChild(lab);
+  const svg = el("svg", { width: weeks * STEP, height: 14 + 7 * STEP, role: "img" });
+  for (let m = 0; m < 12; m++) {
+    const t = Date.UTC(y, m, 1);
+    const col = Math.floor((off + Math.round((t - jan1) / DAY)) / 7);
+    el("text", { x: col * STEP, y: 9 }, svg).textContent = MONTHS[m];
+  }
+  for (let t = jan1; t <= dec31; t += DAY) {
+    const idx = off + Math.round((t - jan1) / DAY);
+    const e = dayMap.get(t);
+    if (e) yTotal++;
+    let cls = "d";
+    if (e) cls += " hit " + e.type;
+    else if (t < ORIGIN || t > TODAY) cls += " pre";
+    if (t === TODAY) cls += " today";
+    const r = el("rect", { x: Math.floor(idx / 7) * STEP, y: 14 + (idx % 7) * STEP, width: C, height: C, rx: 2, class: cls }, svg);
+    if (e) r.dataset.t = t;
+  }
+  svg.setAttribute("aria-label", `${y}: ${yTotal} days in hospital`);
+  lab.innerHTML = `${y}<small>${yTotal} d</small>`;
+  wrap.appendChild(svg); cal.appendChild(wrap);
+}
+cal.addEventListener("pointermove", ev => {
+  const t = ev.target.dataset && ev.target.dataset.t;
+  if (t) showTip(dayTip(+t), ev.clientX, ev.clientY); else hideTip();
+});
+cal.addEventListener("pointerleave", hideTip);
+
+// ---- cumulative chart -----------------------------------------------------
+(function cumulative() {
+  const W = 900, H = 280, L = 44, R = 64, T = 14, B = 28;
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": `Cumulative hospital days, reaching ${total} by ${nice(TODAY)}` });
+  const n = Math.round((TODAY - ORIGIN) / DAY) + 1;
+  const cum = new Array(n); let c = 0;
+  for (let k = 0; k < n; k++) { if (dayMap.has(ORIGIN + k * DAY)) c++; cum[k] = c; }
+  const step = total > 160 ? 50 : total > 80 ? 25 : 10;
+  const yMax = Math.ceil(total / step) * step;
+  const x = k => L + (W - L - R) * k / (n - 1);
+  const y = v => T + (H - T - B) * (1 - v / yMax);
+  for (let v = 0; v <= yMax; v += step) {
+    el("line", { x1: L, x2: W - R, y1: y(v), y2: y(v), class: "gl" }, svg);
+    el("text", { x: L - 8, y: y(v) + 4, "text-anchor": "end", class: "ax" }, svg).textContent = v;
+  }
+  for (let yr = y0 + 1; yr <= y1; yr++) {
+    const k = Math.round((Date.UTC(yr, 0, 1) - ORIGIN) / DAY);
+    el("text", { x: x(k), y: H - 8, "text-anchor": "middle", class: "ax" }, svg).textContent = yr;
+  }
+  let d = `M${x(0)},${y(cum[0])}`, prev = cum[0];
+  for (let k = 1; k < n; k++) if (cum[k] !== prev) { d += `H${x(k - 1)}V${y(cum[k])}`; prev = cum[k]; }
+  d += `H${x(n - 1)}`;
+  el("path", { d: d + `V${y(0)}H${x(0)}Z`, class: "area" }, svg);
+  el("path", { d, class: "line" }, svg);
+  el("text", { x: x(n - 1) + 6, y: y(total) + 4, class: "endlbl" }, svg).textContent = `${total} days`;
+  const xh = el("line", { y1: T, y2: H - B, class: "xh", visibility: "hidden" }, svg);
+  const dot = el("circle", { r: 4, class: "xdot", visibility: "hidden" }, svg);
+  const hit = el("rect", { x: L, y: 0, width: W - L - R, height: H, fill: "transparent" }, svg);
+  const move = ev => {
+    const r = svg.getBoundingClientRect();
+    const sx = (ev.clientX - r.left) * W / r.width;
+    const k = Math.max(0, Math.min(n - 1, Math.round((sx - L) / (W - L - R) * (n - 1))));
+    const t = ORIGIN + k * DAY;
+    xh.setAttribute("x1", x(k)); xh.setAttribute("x2", x(k)); xh.setAttribute("visibility", "visible");
+    dot.setAttribute("cx", x(k)); dot.setAttribute("cy", y(cum[k])); dot.setAttribute("visibility", "visible");
+    showTip(dayTip(t).replace("</b>", `</b><div><b>${cum[k]}</b> hospital days so far</div>`), ev.clientX, ev.clientY);
+  };
+  hit.addEventListener("pointermove", move);
+  hit.addEventListener("pointerleave", () => { hideTip(); xh.setAttribute("visibility", "hidden"); dot.setAttribute("visibility", "hidden"); });
+  document.getElementById("cum").appendChild(svg);
+})();
+
+// ---- per-year bars --------------------------------------------------------
+(function perYear() {
+  const years = [];
+  for (let yr = y0; yr <= y1; yr++) {
+    let v = 0;
+    for (const t of dayMap.keys()) if (new Date(t).getUTCFullYear() === yr) v++;
+    years.push([yr, v]);
+  }
+  document.getElementById("yearnote").textContent =
+    `${y0} starts on 6 September; ${y1} runs to today.`;
+  const W = 900, H = 240, L = 44, R = 8, T = 22, B = 28;
+  const max = Math.max(...years.map(d => d[1]));
+  const step = max > 80 ? 20 : 10, yMax = Math.ceil(max / step) * step;
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Hospital days per year" });
+  const y = v => T + (H - T - B) * (1 - v / yMax);
+  for (let v = 0; v <= yMax; v += step) {
+    el("line", { x1: L, x2: W - R, y1: y(v), y2: y(v), class: "gl" }, svg);
+    el("text", { x: L - 8, y: y(v) + 4, "text-anchor": "end", class: "ax" }, svg).textContent = v;
+  }
+  const band = (W - L - R) / years.length, bw = Math.min(56, band * 0.6);
+  years.forEach(([yr, v], i) => {
+    const cx = L + band * (i + .5), x0 = cx - bw / 2, top = y(v), base = y(0), r = Math.min(4, base - top);
+    const hit = el("rect", { x: L + band * i, y: T, width: band, height: H - T - B, fill: "transparent", class: "barhit" }, svg);
+    if (v > 0) el("path", { class: "bar", d: `M${x0},${base}V${top + r}Q${x0},${top} ${x0 + r},${top}H${x0 + bw - r}Q${x0 + bw},${top} ${x0 + bw},${top + r}V${base}Z` }, svg);
+    el("text", { x: cx, y: top - 6, "text-anchor": "middle", class: "val" }, svg).textContent = v;
+    el("text", { x: cx, y: H - 8, "text-anchor": "middle", class: "ax" }, svg).textContent = yr;
+    const list = stays.filter(s => new Date(s.a).getUTCFullYear() === yr || new Date(s.b).getUTCFullYear() === yr);
+    hit.addEventListener("pointermove", ev => showTip(`<b>${yr}: ${v} day${v === 1 ? "" : "s"}</b>` +
+      list.map(s => `<div class="m">${nice(s.a)}${s.b !== s.a ? " – " + nice(s.b) : ""}${s.open ? " (ongoing)" : ""}</div>`).join(""), ev.clientX, ev.clientY));
+    hit.addEventListener("pointerleave", hideTip);
+  });
+  document.getElementById("years").appendChild(svg);
+})();
+
+// ---- table ----------------------------------------------------------------
+document.getElementById("rows").innerHTML = stays.slice().reverse().map(s => `
+  <tr>
+    <td class="n">${nice(s.a)}${s.b !== s.a || s.open ? `<br>– ${s.open ? "ongoing" : nice(s.b)}` : ""}</td>
+    <td class="n">${s.days}${s.type === "visit" ? '<span class="tag">visit</span>' : ""}${s.open ? '<span class="tag">open</span>' : ""}</td>
+    <td>${esc(s.reason)}<div class="h">${esc(s.hospital)}</div>
+      <div class="src">${s.sources.map(k => `<a href="${SRC[k].url}" target="_blank" rel="noopener">${esc(SRC[k].name)}</a>`).join("")}</div></td>
+  </tr>`).join("");
+
+document.getElementById("updated").textContent = `Counts computed as of ${nice(TODAY)} (Brasília time).`;
+})();
+</script>
+</body>
+</html>
